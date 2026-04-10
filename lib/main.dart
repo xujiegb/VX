@@ -835,7 +835,7 @@ class _AppState extends State<App> with WidgetsBindingObserver {
       if (uri.queryParameters['url'] != null) {
         context.read<SubscriptionBloc>().add(
           AddSubscriptionEvent(
-            uri.queryParameters['name']!,
+            uri.queryParameters['name'] ?? '',
             uri.queryParameters['url']!,
           ),
         );

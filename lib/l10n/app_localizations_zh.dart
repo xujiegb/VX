@@ -1428,7 +1428,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get dnsRule => 'DNS规则';
 
   @override
-  String get dnsRuleNameGfwProxyFake => 'GFW模式代理域名A/AAAA';
+  String get dnsRuleNameGfwProxyFake => 'GFW模式代理域名 & 非中国大陆域名(A/AAAA)';
 
   @override
   String get dnsRuleNameGfwProxy => 'GFW模式代理域名';
@@ -1798,7 +1798,7 @@ class AppLocalizationsZh extends AppLocalizations {
   String get lookupEchDesc => '如果启用且上面的ECH Config为空，则从DNS服务器查找ECH Config, 如果查询成功，使用ECH，否则不使用ECH。';
 
   @override
-  String get adWanted => '发布广告';
+  String get adWanted => '在VX内投放广告';
 
   @override
   String get basicQuickDeployTitle => '双核四协议';

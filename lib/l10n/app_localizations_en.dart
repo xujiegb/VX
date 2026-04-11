@@ -1478,7 +1478,7 @@ class AppLocalizationsEn extends AppLocalizations {
   String get dnsRule => 'DNS Rules';
 
   @override
-  String get dnsRuleNameGfwProxyFake => 'GFW Mode Proxy Domains(A/AAAA)';
+  String get dnsRuleNameGfwProxyFake => 'GFW Mode Proxy Domains & Non CN Domains(A/AAAA)';
 
   @override
   String get dnsRuleNameGfwProxy => 'GFW Mode Proxy Domains';

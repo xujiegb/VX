@@ -2758,7 +2758,7 @@ abstract class AppLocalizations {
   /// No description provided for @dnsRuleNameGfwProxyFake.
   ///
   /// In en, this message translates to:
-  /// **'GFW Mode Proxy Domains(A/AAAA)'**
+  /// **'GFW Mode Proxy Domains & Non CN Domains(A/AAAA)'**
   String get dnsRuleNameGfwProxyFake;
 
   /// No description provided for @dnsRuleNameGfwProxy.

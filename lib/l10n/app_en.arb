@@ -629,7 +629,7 @@
   "cnDesc": "All domains/IPs of China mainland go direct, others go proxy",
   "proxyAllDesc": "All non-private domains/IPs go proxy",
   "dnsRule": "DNS Rules",
-  "dnsRuleNameGfwProxyFake": "GFW Mode Proxy Domains(A/AAAA)",
+  "dnsRuleNameGfwProxyFake": "GFW Mode Proxy Domains & Non CN Domains(A/AAAA)",
   "dnsRuleNameGfwProxy": "GFW Mode Proxy Domains",
   "dnsRuleNameRuBlockProxyFake": "RU-Block Mode Proxy Domains(A/AAAA)",
   "dnsRuleNameRuBlockProxy": "RU-Block Mode Proxy Domains",

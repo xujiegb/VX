@@ -1695,3 +1695,394 @@ class __HttpClientState extends State<_HttpClient> {
     );
   }
 }
+
+class _WireguardPeerEditors {
+  _WireguardPeerEditors({
+    required this.publicKey,
+    required this.preSharedKey,
+    required this.endpoint,
+    required this.keepAlive,
+    required this.allowedIps,
+  });
+
+  factory _WireguardPeerEditors.empty() {
+    return _WireguardPeerEditors(
+      publicKey: TextEditingController(),
+      preSharedKey: TextEditingController(),
+      endpoint: TextEditingController(),
+      keepAlive: TextEditingController(),
+      allowedIps: TextEditingController(),
+    );
+  }
+
+  factory _WireguardPeerEditors.fromPeer(PeerConfig p) {
+    return _WireguardPeerEditors(
+      publicKey: TextEditingController(text: p.publicKey),
+      preSharedKey: TextEditingController(text: p.preSharedKey),
+      endpoint: TextEditingController(text: p.endpoint),
+      keepAlive: TextEditingController(
+        text: p.keepAlive != 0 ? '${p.keepAlive}' : '',
+      ),
+      allowedIps: TextEditingController(text: p.allowedIps.join('\n')),
+    );
+  }
+
+  final TextEditingController publicKey;
+  final TextEditingController preSharedKey;
+  final TextEditingController endpoint;
+  final TextEditingController keepAlive;
+  final TextEditingController allowedIps;
+
+  void dispose() {
+    publicKey.dispose();
+    preSharedKey.dispose();
+    endpoint.dispose();
+    keepAlive.dispose();
+    allowedIps.dispose();
+  }
+
+  void copyTo(PeerConfig p) {
+    p.publicKey = publicKey.text.trim();
+    if (preSharedKey.text.trim().isEmpty) {
+      p.clearPreSharedKey();
+    } else {
+      p.preSharedKey = preSharedKey.text.trim();
+    }
+    p.endpoint = endpoint.text.trim();
+    final ka = int.tryParse(keepAlive.text.trim());
+    if (ka == null || ka <= 0) {
+      p.clearKeepAlive();
+    } else {
+      p.keepAlive = ka;
+    }
+    p.allowedIps.clear();
+    for (final line in allowedIps.text.split(RegExp(r'[\n,]+'))) {
+      final s = line.trim();
+      if (s.isNotEmpty) {
+        p.allowedIps.add(s);
+      }
+    }
+  }
+}
+
+class _WireguardClient extends StatefulWidget {
+  const _WireguardClient({required this.config});
+
+  final DeviceConfig config;
+
+  @override
+  State<_WireguardClient> createState() => _WireguardClientState();
+}
+
+class _WireguardClientState extends State<_WireguardClient> {
+  late final TextEditingController _secretKey;
+  late final TextEditingController _localAddresses;
+  late final TextEditingController _mtu;
+  late final TextEditingController _numWorkers;
+  late final TextEditingController _reserved;
+  late List<_WireguardPeerEditors> _peerEditors;
+
+  @override
+  void initState() {
+    super.initState();
+    final c = widget.config;
+    if (c.peers.isEmpty) {
+      c.peers.add(PeerConfig());
+    }
+    _secretKey = TextEditingController(text: c.secretKey);
+    _localAddresses = TextEditingController(text: c.endpoint.join('\n'));
+    _mtu = TextEditingController(
+      text: c.hasMtu() && c.mtu != 0 ? '${c.mtu}' : '',
+    );
+    _numWorkers = TextEditingController(
+      text: c.hasNumWorkers() && c.numWorkers != 0 ? '${c.numWorkers}' : '',
+    );
+    _reserved = TextEditingController(
+      text: c.hasReserved() && c.reserved.isNotEmpty
+          ? c.reserved.map((b) => b.toString()).join(',')
+          : '',
+    );
+    _peerEditors = c.peers
+        .map((p) => _WireguardPeerEditors.fromPeer(p))
+        .toList();
+  }
+
+  @override
+  void dispose() {
+    _secretKey.dispose();
+    _localAddresses.dispose();
+    _mtu.dispose();
+    _numWorkers.dispose();
+    _reserved.dispose();
+    for (final e in _peerEditors) {
+      e.dispose();
+    }
+    super.dispose();
+  }
+
+  void _addPeer() {
+    setState(() {
+      widget.config.peers.add(PeerConfig());
+      _peerEditors.add(_WireguardPeerEditors.empty());
+    });
+  }
+
+  void _removePeer(int index) {
+    if (widget.config.peers.length <= 1) {
+      return;
+    }
+    setState(() {
+      _peerEditors[index].dispose();
+      _peerEditors.removeAt(index);
+      widget.config.peers.removeAt(index);
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        TextFormField(
+          controller: _secretKey,
+          decoration: const InputDecoration(
+            labelText: 'Private key',
+            helperText: 'Base64 or 64-char hex',
+          ),
+          validator: (value) {
+            if (value == null || value.trim().isEmpty) {
+              return AppLocalizations.of(context)!.fieldRequired;
+            }
+            widget.config.secretKey = value.trim();
+            return null;
+          },
+        ),
+        boxH10,
+        TextFormField(
+          controller: _localAddresses,
+          minLines: 2,
+          maxLines: 6,
+          decoration: const InputDecoration(
+            labelText: 'Interface addresses',
+            helperText: 'One per line, e.g. 10.0.0.2/32',
+          ),
+          validator: (value) {
+            widget.config.endpoint.clear();
+            final lines = value?.split(RegExp(r'\r?\n')) ?? [];
+            var any = false;
+            for (final line in lines) {
+              final s = line.trim();
+              if (s.isNotEmpty) {
+                widget.config.endpoint.add(s);
+                any = true;
+              }
+            }
+            if (!any) {
+              return AppLocalizations.of(context)!.fieldRequired;
+            }
+            return null;
+          },
+        ),
+        boxH10,
+        Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Expanded(
+              child: TextFormField(
+                controller: _mtu,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(
+                  labelText: 'MTU',
+                  helperText: 'Leave empty for default (1420)',
+                ),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    widget.config.clearMtu();
+                    return null;
+                  }
+                  final i = int.tryParse(value);
+                  if (i == null || i < 576 || i > 65535) {
+                    return 'Invalid MTU';
+                  }
+                  widget.config.mtu = i;
+                  return null;
+                },
+              ),
+            ),
+            boxW10,
+            Expanded(
+              child: TextFormField(
+                controller: _numWorkers,
+                keyboardType: TextInputType.number,
+                inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                decoration: const InputDecoration(labelText: 'Workers'),
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    widget.config.clearNumWorkers();
+                    return null;
+                  }
+                  final i = int.tryParse(value);
+                  if (i == null || i < 1) {
+                    return 'Invalid';
+                  }
+                  widget.config.numWorkers = i;
+                  return null;
+                },
+              ),
+            ),
+          ],
+        ),
+        boxH10,
+        TextFormField(
+          controller: _reserved,
+          decoration: const InputDecoration(
+            labelText: 'Reserved bytes',
+            helperText: 'Optional, three 0–255 values: e.g. 0,0,0',
+          ),
+          validator: (value) {
+            final t = value?.trim() ?? '';
+            if (t.isEmpty) {
+              widget.config.clearReserved();
+              return null;
+            }
+            final parts = t.split(',');
+            if (parts.length != 3) {
+              return 'Need exactly three comma-separated bytes';
+            }
+            final bytes = <int>[];
+            for (final p in parts) {
+              final n = int.tryParse(p.trim());
+              if (n == null || n < 0 || n > 255) {
+                return 'Each value must be 0–255';
+              }
+              bytes.add(n);
+            }
+            widget.config.reserved = bytes;
+            return null;
+          },
+        ),
+        boxH10,
+        SwitchListTile(
+          title: const Text('No kernel TUN'),
+          subtitle: Text(
+            'Use userspace TUN (gVisor) instead of OS TUN',
+            style: Theme.of(context).textTheme.bodySmall!.copyWith(
+              color: Theme.of(context).colorScheme.onSurfaceVariant,
+            ),
+          ),
+          value: widget.config.noKernelTun,
+          onChanged: (v) {
+            setState(() {
+              widget.config.noKernelTun = v;
+            });
+          },
+        ),
+        const Gap(8),
+        Row(
+          children: [
+            Text('Peers', style: Theme.of(context).textTheme.titleMedium),
+            const Spacer(),
+            TextButton.icon(
+              onPressed: _addPeer,
+              icon: const Icon(Icons.add),
+              label: const Text('Add peer'),
+            ),
+          ],
+        ),
+        ..._peerEditors.asMap().entries.map((entry) {
+          final i = entry.key;
+          final ed = entry.value;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: FormContainer(
+              children: [
+                Row(
+                  children: [
+                    Text(
+                      'Peer ${i + 1}',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const Spacer(),
+                    if (_peerEditors.length > 1)
+                      IconButton(
+                        tooltip: 'Remove peer',
+                        onPressed: () => _removePeer(i),
+                        icon: const Icon(Icons.delete_outline),
+                      ),
+                  ],
+                ),
+                boxH10,
+                TextFormField(
+                  controller: ed.publicKey,
+                  decoration: const InputDecoration(
+                    labelText: 'Public key',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return AppLocalizations.of(context)!.fieldRequired;
+                    }
+                    ed.copyTo(widget.config.peers[i]);
+                    return null;
+                  },
+                ),
+                boxH10,
+                TextFormField(
+                  controller: ed.preSharedKey,
+                  decoration: const InputDecoration(
+                    labelText: 'Pre-shared key',
+                    helperText: 'Optional',
+                  ),
+                  onChanged: (_) => ed.copyTo(widget.config.peers[i]),
+                ),
+                boxH10,
+                TextFormField(
+                  controller: ed.endpoint,
+                  decoration: const InputDecoration(
+                    labelText: 'Endpoint',
+                    helperText: 'host:port',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return AppLocalizations.of(context)!.fieldRequired;
+                    }
+                    ed.copyTo(widget.config.peers[i]);
+                    return null;
+                  },
+                ),
+                boxH10,
+                TextFormField(
+                  controller: ed.keepAlive,
+                  keyboardType: TextInputType.number,
+                  inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                  decoration: const InputDecoration(
+                    labelText: 'Persistent keepalive (seconds)',
+                    helperText: 'Optional',
+                  ),
+                  onChanged: (_) => ed.copyTo(widget.config.peers[i]),
+                ),
+                boxH10,
+                TextFormField(
+                  controller: ed.allowedIps,
+                  minLines: 2,
+                  maxLines: 6,
+                  decoration: const InputDecoration(
+                    labelText: 'Allowed IPs',
+                    helperText: 'One per line or comma-separated',
+                  ),
+                  validator: (value) {
+                    if (value == null || value.trim().isEmpty) {
+                      return AppLocalizations.of(context)!.fieldRequired;
+                    }
+                    ed.copyTo(widget.config.peers[i]);
+                    return null;
+                  },
+                ),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+}

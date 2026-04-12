@@ -26,6 +26,7 @@ import 'package:tm/protos/vx/proxy/socks/socks.pb.dart';
 import 'package:tm/protos/vx/proxy/trojan/trojan.pb.dart';
 import 'package:tm/protos/vx/proxy/vless/vless.pb.dart';
 import 'package:tm/protos/vx/proxy/vmess/vmess.pb.dart';
+import 'package:tm/protos/vx/proxy/wireguard/config.pb.dart';
 import 'package:vx/theme.dart';
 import 'package:vx/widgets/outbound_handler_form/outbound_handler_form.dart';
 
@@ -121,6 +122,8 @@ ProxyProtocolLabel getProtocolTypeFromAny(Any any) {
         'type.googleapis.com/vx.proxy.http.HttpClientConfig' ||
         'type.googleapis.com/vx.proxy.http.HttpServerConfig':
       return ProxyProtocolLabel.http;
+    case 'type.googleapis.com/vx.proxy.wireguard.DeviceConfig':
+      return ProxyProtocolLabel.wireguard;
     default:
       throw Exception('unknown protocol: ${any.typeUrl}');
   }
@@ -140,7 +143,8 @@ enum ProxyProtocolLabel {
   hysteria2('Hysteria2'),
   anytls('AnyTLS'),
   dokodemo('Dokodemo'),
-  http('HTTP');
+  http('HTTP'),
+  wireguard('WireGuard');
 
   const ProxyProtocolLabel(this.label);
   final String label;
@@ -172,6 +176,8 @@ enum ProxyProtocolLabel {
         return DokodemoConfig();
       case ProxyProtocolLabel.http:
         return HttpServerConfig();
+      case ProxyProtocolLabel.wireguard:
+        return DeviceConfig(isClient: false);
     }
   }
 }

@@ -35,6 +35,7 @@ import 'package:tm/protos/vx/proxy/socks/socks.pb.dart';
 import 'package:tm/protos/vx/proxy/trojan/trojan.pb.dart';
 import 'package:tm/protos/vx/proxy/vless/vless.pb.dart';
 import 'package:tm/protos/vx/proxy/vmess/vmess.pb.dart';
+import 'package:tm/protos/vx/proxy/wireguard/config.pb.dart';
 import 'package:tm/protos/vx/user/user.pb.dart';
 import 'package:tm/protos/vx/transport/security/tls/certificate.pb.dart';
 import 'package:tm/protos/vx/transport/protocols/grpc/config.pb.dart';
@@ -50,7 +51,6 @@ import 'package:tm/protos/vx/transport/transport.pb.dart';
 import 'package:vx/app/routing/routing_page.dart';
 import 'package:vx/common/config.dart';
 import 'package:vx/common/const.dart';
-import 'package:flutter_common/util/net.dart';
 import 'package:vx/common/net.dart';
 import 'package:vx/theme.dart';
 import 'package:uuid/uuid.dart';
@@ -113,6 +113,7 @@ class OutboundHandlerFormState extends State<OutboundHandlerForm>
   AnytlsClientConfig _anytlsConfig = AnytlsClientConfig();
   Hysteria2ClientConfig _hysteriaConfig = _getDefaultHysteriaConfig();
   HttpClientConfig _httpConfig = HttpClientConfig(account: Account());
+  DeviceConfig _wireguardConfig = DeviceConfig();
 
   TextFormField? _name;
   final _nameController = TextEditingController();
@@ -175,6 +176,8 @@ class OutboundHandlerFormState extends State<OutboundHandlerForm>
           _anytlsConfig = any.unpackInto(_anytlsConfig);
         case ProxyProtocolLabel.http:
           _httpConfig = any.unpackInto(_httpConfig);
+        case ProxyProtocolLabel.wireguard:
+          _wireguardConfig = any.unpackInto(_wireguardConfig);
         default:
           throw Exception('Unexpected protocol: $_selectedProtocolLabel');
       }
@@ -203,21 +206,26 @@ class OutboundHandlerFormState extends State<OutboundHandlerForm>
         protocol = Any.pack(_anytlsConfig);
       case ProxyProtocolLabel.http:
         protocol = Any.pack(_httpConfig);
+      case ProxyProtocolLabel.wireguard:
+        protocol = Any.pack(_wireguardConfig);
       default:
         throw Exception('Unexpected protocol: $_selectedProtocolLabel');
       // _transportConfig.clear();
     }
+    final wireguard = _selectedProtocolLabel == ProxyProtocolLabel.wireguard;
     return OutboundHandlerConfig(
       tag: _nameController.text,
-      address: _serverAddress.text,
+      address: wireguard ? '' : _serverAddress.text,
       // port: int.tryParse(_port.text),
-      ports: tryParsePorts(_port.text),
+      ports: wireguard ? null : tryParsePorts(_port.text),
       domainStrategy: _domainStrategy,
-      enableMux: _enableMux,
-      uot: _enableUdpOverTcp,
-      transport: _transportInputGlobalKey.currentState?.transportConfig,
+      enableMux: wireguard ? false : _enableMux,
+      uot: wireguard ? false : _enableUdpOverTcp,
+      transport: wireguard
+          ? null
+          : _transportInputGlobalKey.currentState?.transportConfig,
       protocol: protocol,
-      muxConfig: _enableMux
+      muxConfig: (!wireguard && _enableMux)
           ? MuxConfig(
               maxConcurrency: int.parse(_muxConcurrencyController.text),
               maxConnection: int.parse(_muxConnectionController.text),
@@ -305,42 +313,44 @@ class OutboundHandlerFormState extends State<OutboundHandlerForm>
               ],
             ),
             boxH10,
-            TextFormField(
-              controller: _serverAddress,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Server address cannot be empty';
-                }
-                _serverAddress.text = value;
-                return null;
-              },
-              decoration: InputDecoration(
-                labelText: AppLocalizations.of(context)!.address,
-                hintText: AppLocalizations.of(context)!.ipOrDomain,
-              ).applyDefaults(Theme.of(context).inputDecorationTheme),
-            ),
-            boxH10,
-            TextFormField(
-              controller: _port,
-              validator: (value) {
-                if (value == null || value.isEmpty) {
-                  return 'Port cannot be empty';
-                }
-                if (int.tryParse(value) != null) {
+            if (_selectedProtocolLabel != ProxyProtocolLabel.wireguard) ...[
+              TextFormField(
+                controller: _serverAddress,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Server address cannot be empty';
+                  }
+                  _serverAddress.text = value;
                   return null;
-                }
-                if (tryParsePorts(value) != null) {
-                  return null;
-                }
-                return 'Invalid port';
-              },
-              keyboardType: TextInputType.number,
-              decoration: InputDecoration(
-                labelText: AppLocalizations.of(context)!.port,
-                hintText: '443',
-              ).applyDefaults(Theme.of(context).inputDecorationTheme),
-            ),
-            const Gap(10),
+                },
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.address,
+                  hintText: AppLocalizations.of(context)!.ipOrDomain,
+                ).applyDefaults(Theme.of(context).inputDecorationTheme),
+              ),
+              boxH10,
+              TextFormField(
+                controller: _port,
+                validator: (value) {
+                  if (value == null || value.isEmpty) {
+                    return 'Port cannot be empty';
+                  }
+                  if (int.tryParse(value) != null) {
+                    return null;
+                  }
+                  if (tryParsePorts(value) != null) {
+                    return null;
+                  }
+                  return 'Invalid port';
+                },
+                keyboardType: TextInputType.number,
+                decoration: InputDecoration(
+                  labelText: AppLocalizations.of(context)!.port,
+                  hintText: '443',
+                ).applyDefaults(Theme.of(context).inputDecorationTheme),
+              ),
+              const Gap(10),
+            ],
             DropdownMenu(
               label: const Text('Domain Strategy'),
               initialSelection: _domainStrategy,
@@ -364,7 +374,8 @@ class OutboundHandlerFormState extends State<OutboundHandlerForm>
               ),
             ),
             const Gap(10),
-            if (_selectedProtocolLabel != ProxyProtocolLabel.hysteria2)
+            if (_selectedProtocolLabel != ProxyProtocolLabel.hysteria2 &&
+                _selectedProtocolLabel != ProxyProtocolLabel.wireguard)
               Column(
                 children: [
                   SwitchListTile(
@@ -480,8 +491,11 @@ class OutboundHandlerFormState extends State<OutboundHandlerForm>
               _AnytlsClient(config: _anytlsConfig),
             if (_selectedProtocolLabel == ProxyProtocolLabel.http)
               _HttpClient(config: _httpConfig),
+            if (_selectedProtocolLabel == ProxyProtocolLabel.wireguard)
+              _WireguardClient(config: _wireguardConfig),
             const Gap(10),
-            if (_selectedProtocolLabel != ProxyProtocolLabel.hysteria2)
+            if (_selectedProtocolLabel != ProxyProtocolLabel.hysteria2 &&
+                _selectedProtocolLabel != ProxyProtocolLabel.wireguard)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
